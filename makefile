@@ -8,5 +8,4 @@ install:
 	cargo install --path .
 
 uninstall:
-	cargo uninstall rcleanup
-
+	cargo uninstall rgenpass0
