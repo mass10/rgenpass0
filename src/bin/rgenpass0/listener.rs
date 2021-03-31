@@ -23,47 +23,6 @@ fn parse_request_data_json(request_string: &str) -> Result<ApplicationRequestCon
 	return Ok(request_data);
 }
 
-/// ピアのソケットからリクエストデータを読みます。
-fn accept(mut peer_socket: std::net::TcpStream, current_complexity: u8) -> Result<String, Box<dyn std::error::Error>> {
-	use std::io::Read;
-	use std::io::Write;
-
-	// 読み込みタイムアウトは15秒
-	let result = peer_socket.set_read_timeout(Some(std::time::Duration::from_secs(15)));
-	if result.is_err() {
-		// println!("[ERROR] タイムアウト設定に失敗しています。(情報: {})", result.err().unwrap());
-		return Ok("FATAL".to_string());
-	}
-
-	// リクエストデータ
-	let mut line = "".to_string();
-	let result = peer_socket.read_to_string(&mut line);
-	if result.is_err() {
-		let error = result.err().unwrap();
-		if error.kind() != std::io::ErrorKind::WouldBlock {
-			// println!("[ERROR] リクエストデータの受信が完了しませんでした。情報: {}, [{}]", error, line);
-			return Ok("REJECTED".to_string());
-		}
-	}
-
-	// リクエストデータをパース
-	let result = parse_request_data_json(&line);
-	if result.is_err() {
-		// let error = result.err().unwrap();
-		// println!("[ERROR] リクエストデータのパースに失敗しました。情報: {}", error);
-		return Ok("REJECTED".to_string());
-	}
-
-	// リクエストデータは読み捨て
-	// let request_data = result.unwrap();
-
-	// 応答
-	let json_text = format!("{{\"content\": \"HELO\", \"current\": \"{}\"}}", current_complexity);
-	peer_socket.write_all(json_text.as_bytes())?;
-
-	return Ok("ACCEPTED".to_string());
-}
-
 pub struct Listener;
 
 impl Listener {
@@ -72,7 +31,49 @@ impl Listener {
 	/// ### Returns
 	/// `Listener` の新しいインスタンス
 	pub fn new() -> Listener {
-		Listener {}
+		return Listener {};
+	}
+
+	/// ピアのソケットからリクエストデータを読みます。
+	fn accept(&self, mut peer_socket: std::net::TcpStream, current_complexity: u8) -> Result<String, Box<dyn std::error::Error>> {
+		use std::io::Read;
+		use std::io::Write;
+
+		// 読み込みタイムアウトは15秒
+		let result = peer_socket.set_read_timeout(Some(std::time::Duration::from_secs(15)));
+		if result.is_err() {
+			// println!("[ERROR] タイムアウト設定に失敗しています。(情報: {})", result.err().unwrap());
+			return Ok("FATAL".to_string());
+		}
+
+		// リクエストデータ
+		let mut line = "".to_string();
+		let result = peer_socket.read_to_string(&mut line);
+		if result.is_err() {
+			let error = result.err().unwrap();
+			if error.kind() != std::io::ErrorKind::WouldBlock {
+				// println!("[ERROR] リクエストデータの受信が完了しませんでした。情報: {}, [{}]", error, line);
+				return Ok("REJECTED".to_string());
+			}
+		}
+
+		// リクエストデータをパース
+		let result = parse_request_data_json(&line);
+		if result.is_err() {
+			// これが結構出る
+			// let error = result.err().unwrap();
+			// println!("[ERROR] リクエストデータのパースに失敗しました。情報: {}", error);
+			return Ok("REJECTED".to_string());
+		}
+
+		// リクエストデータは読み捨て
+		let _request_data = result.unwrap();
+
+		// 応答
+		let json_text = format!("{{\"content\": \"HELO\", \"current\": \"{}\"}}", current_complexity);
+		peer_socket.write_all(json_text.as_bytes())?;
+
+		return Ok("ACCEPTED".to_string());
 	}
 
 	/// リスナーを起動します。
@@ -113,7 +114,7 @@ impl Listener {
 			}
 			if stream.is_ok() {
 				// 接続要求を検出しました。
-				let result = accept(stream.unwrap(), current_complexity);
+				let result = self.accept(stream.unwrap(), current_complexity);
 				if result.is_err() {
 					println!("[ERROR] ピアとの通信中にエラーが発生しました。情報: {}", result.err().unwrap());
 				} else {
