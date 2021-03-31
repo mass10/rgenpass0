@@ -6,7 +6,7 @@ mod listener;
 mod server;
 mod util;
 
-/// Usage.
+/// 使用方法
 fn usage() {
 	println!("No usage.");
 }
@@ -25,7 +25,8 @@ fn main() {
 	}
 
 	// アプリケーションを起動
-	let result = application::run(&request);
+	let app = application::Application::new();
+	let result = app.run(&request);
 	if result.is_err() {
 		println!("[ERROR] {}", result.err().unwrap());
 		return;
