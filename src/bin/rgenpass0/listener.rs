@@ -64,71 +64,83 @@ fn accept(mut peer_socket: std::net::TcpStream, current_complexity: u8) -> Resul
 	return Ok("ACCEPTED".to_string());
 }
 
-/// リスナーを起動します。
-fn start_listener() -> Result<(), Box<dyn std::error::Error>> {
-	use super::util;
+pub struct Listener;
 
-	// リスナーを起動します。
-	let addresses = [std::net::SocketAddr::from(([127, 0, 0, 1], 8082))];
-	let result = std::net::TcpListener::bind(&addresses[..]);
-	if result.is_err() {
-		let error = result.err().unwrap();
-		let message_text = error.to_string();
-		if message_text.contains("10048") {
-			// Address already in use
+impl Listener {
+	/// 新しいインスタンスを返します。
+	///
+	/// ### Returns
+	/// `Listener` の新しいインスタンス
+	pub fn new() -> Listener {
+		Listener {}
+	}
+
+	/// リスナーを起動します。
+	fn start_listener(&self) -> Result<(), Box<dyn std::error::Error>> {
+		use super::util;
+
+		// リスナーを起動します。
+		let addresses = [std::net::SocketAddr::from(([127, 0, 0, 1], 8082))];
+		let result = std::net::TcpListener::bind(&addresses[..]);
+		if result.is_err() {
+			let error = result.err().unwrap();
+			let message_text = error.to_string();
+			if message_text.contains("10048") {
+				// Address already in use
+				return Ok(());
+			}
+			// その他の問題
 			return Ok(());
 		}
-		// その他の問題
+
+		let listener = result.unwrap();
+
+		let result = listener.set_nonblocking(true);
+		if result.is_err() {
+			println!("[ERROR] ノンブロッキング初期化操作でエラーが発生しました。情報: {}", result.err().unwrap());
+		}
+
+		// タイムキーパー
+		let mut time_keeper = util::TimeKeeper::new();
+
+		// 複雑性
+		let mut current_complexity = 0u8;
+
+		// 接続要求を待っています。
+		for stream in listener.incoming() {
+			if time_keeper.is_over() {
+				break;
+			}
+			if stream.is_ok() {
+				// 接続要求を検出しました。
+				let result = accept(stream.unwrap(), current_complexity);
+				if result.is_err() {
+					println!("[ERROR] ピアとの通信中にエラーが発生しました。情報: {}", result.err().unwrap());
+				} else {
+					let status = result.ok().unwrap();
+					if status == "ACCEPTED" {
+						current_complexity += 1;
+						time_keeper.reset();
+					}
+				}
+				// コネクションを切断
+				// peer_socket.shutdown(std::net::Shutdown::Both)?;
+				std::thread::sleep(std::time::Duration::from_millis(5));
+			} else if stream.is_err() {
+				let e = stream.err().unwrap();
+				if e.kind() == std::io::ErrorKind::WouldBlock {
+					std::thread::sleep(std::time::Duration::from_millis(5));
+				} else {
+					println!("[ERROR] サーバーは待機中にエラーを検出しました。情報: {}", e);
+					break;
+				}
+			}
+		}
+
 		return Ok(());
 	}
 
-	let listener = result.unwrap();
-
-	let result = listener.set_nonblocking(true);
-	if result.is_err() {
-		println!("[ERROR] ノンブロッキング初期化操作でエラーが発生しました。情報: {}", result.err().unwrap());
+	pub fn run_as_server(&self) -> Result<(), Box<dyn std::error::Error>> {
+		return self.start_listener();
 	}
-
-	// タイムキーパー
-	let mut time_keeper = util::TimeKeeper::new();
-
-	// 複雑性
-	let mut current_complexity = 0u8;
-
-	// 接続要求を待っています。
-	for stream in listener.incoming() {
-		if time_keeper.is_over() {
-			break;
-		}
-		if stream.is_ok() {
-			// 接続要求を検出しました。
-			let result = accept(stream.unwrap(), current_complexity);
-			if result.is_err() {
-				println!("[ERROR] ピアとの通信中にエラーが発生しました。情報: {}", result.err().unwrap());
-			} else {
-				let status = result.ok().unwrap();
-				if status == "ACCEPTED" {
-					current_complexity += 1;
-					time_keeper.reset();
-				}
-			}
-			// コネクションを切断
-			// peer_socket.shutdown(std::net::Shutdown::Both)?;
-			std::thread::sleep(std::time::Duration::from_millis(5));
-		} else if stream.is_err() {
-			let e = stream.err().unwrap();
-			if e.kind() == std::io::ErrorKind::WouldBlock {
-				std::thread::sleep(std::time::Duration::from_millis(5));
-			} else {
-				println!("[ERROR] サーバーは待機中にエラーを検出しました。情報: {}", e);
-				break;
-			}
-		}
-	}
-
-	return Ok(());
-}
-
-pub fn run_as_server() -> Result<(), Box<dyn std::error::Error>> {
-	return start_listener();
 }
