@@ -1,6 +1,6 @@
 # About
 
-Simple template for Rust repository.
+rgenpass0. A strange, password generator.
 
 # Getting Started
 
